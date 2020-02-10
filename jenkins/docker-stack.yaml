@@ -1,0 +1,111 @@
+version: "3.7"
+services:
+  jenkins-master:
+    image: ntdtfr/jenkins
+    ports:
+      # Jenkins UI
+      #- 8090:8080
+      # Jenkins Slave
+      - 50000:50000
+    networks:
+      - public
+      - private
+    volumes:
+      - jenkins_master_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+          - node.labels.node == jenkins
+      restart_policy:
+        condition: on-failure
+      labels:
+        # v2.x
+        # Dashboard
+        - traefik.enable=true
+        - traefik.http.services.jenkins-master.loadbalancer.server.port=8080
+        - traefik.http.routers.jenkins-master.rule=Host(`jenkins.${DOMAIN:-swarm.local}`)
+  # Jenkins JNLP slave
+  jenkins-slave-1:
+    image: jenkins/jnlp-slave
+    environment:
+      # url for the Jenkins server, can be used as a replacement to -url option, or to set alternate jenkins URL
+      - JENKINS_URL=http://jenkins-master:8080
+      # (HOST:PORT) connect to this agent host and port instead of Jenkins server, assuming this one do route TCP traffic to Jenkins master.
+      # Useful when when Jenkins runs behind a load balancer, reverse proxy, etc.
+      # - JENKINS_TUNNEL=(HOST:PORT)
+      # agent secret, if not set as an argument
+      - JENKINS_SECRET=c01daaf4b094e29e99f2af02b27560e3800975639757dc08660b7fe1f3348d11
+      # agent name, if not set as an argument
+      - JENKINS_AGENT_NAME=slave-1
+      # agent work directory, if not set by optional parameter -workDir
+      - JENKINS_AGENT_WORKDIR=/home/jenkins
+    networks:
+      - public
+      - private
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+      restart_policy:
+        condition: on-failure
+  # Jenkins JNLP slave
+  jenkins-slave-2:
+    image: jenkins/jnlp-slave
+    environment:
+      # url for the Jenkins server, can be used as a replacement to -url option, or to set alternate jenkins URL
+      - JENKINS_URL=http://jenkins-master:8080
+      # (HOST:PORT) connect to this agent host and port instead of Jenkins server, assuming this one do route TCP traffic to Jenkins master.
+      # Useful when when Jenkins runs behind a load balancer, reverse proxy, etc.
+      # - JENKINS_TUNNEL=(HOST:PORT)
+      # agent secret, if not set as an argument
+      - JENKINS_SECRET=ff0d450ee702e63ea014d90537e9ec9f16a9421e029b626605dead41eed8ba4c
+      # agent name, if not set as an argument
+      - JENKINS_AGENT_NAME=slave-2
+      # agent work directory, if not set by optional parameter -workDir
+      - JENKINS_AGENT_WORKDIR=/home/jenkins
+    networks:
+      - public
+      - private
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+      restart_policy:
+        condition: on-failure
+  # Jenkins GCC slave
+  jenkins-slave-gcc:
+    image: ntdtfr/jenkins-slave-gcc
+    ports:
+      - 2222:22
+    networks:
+      - public
+      - private
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - jenkins_slave_home:/home/jenkins/jenkins_slave
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+      restart_policy:
+        condition: on-failure
+networks:
+  public:
+    name: traefik-net
+    driver: overlay
+    external: true
+  private:
+    driver: overlay
+volumes:
+  jenkins_master_home: {}
+  jenkins_slave_home: {}

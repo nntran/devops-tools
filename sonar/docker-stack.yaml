@@ -1,0 +1,74 @@
+version: "3.7"
+services:
+  # SonarQube for code analysis
+  sonarqube:
+    #user: 1004:1004
+    image: sonarqube
+    # ports:
+    #   - 9000:9000
+    networks:
+      - public
+      - private
+    environment:
+      - sonar.jdbc.url=jdbc:postgresql://sonarqube-db:5432/sonar
+    volumes:
+      - sonarqube_conf:/opt/sonarqube/conf
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_temp:/opt/sonarqube/temp
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_plugins:/opt/sonarqube/lib/bundled-plugins
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.sonarqube.loadbalancer.server.port=9000
+        - traefik.http.routers.sonarqube.rule=Host(`sonar.${DOMAIN:-swarm.local}`)
+    # logging:
+    #   driver: "journald"
+
+  sonarqube-db:
+    image: postgres
+    networks:
+      - public
+      - private
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=sonar
+    volumes:
+      - sonarqube_postgresql:/var/lib/postgresql
+      - sonarqube_postgresql_data:/var/lib/postgresql/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+      restart_policy:
+        condition: on-failure
+    # logging:
+    #   driver: "journald"
+
+networks:
+  public:
+    name: traefik-net
+    driver: overlay
+    external: true
+  private:
+    driver: overlay
+
+volumes:
+  sonarqube_conf: {}
+  sonarqube_logs: {}
+  sonarqube_temp: {}
+  sonarqube_data: {}
+  sonarqube_extensions: {}
+  sonarqube_plugins: {}
+  sonarqube_postgresql: {}
+  sonarqube_postgresql_data: {}
